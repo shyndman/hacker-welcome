@@ -64,9 +64,9 @@ hw::_install_cron_if_needed() {
   : >| "$HW_SENTINEL"
 }
 
-hw::_refresh_cache_async() {
+hw::_refresh_cache() {
   command -v python3 >/dev/null 2>&1 || return
-  nohup /usr/bin/env python3 "$HW_REFRESH_SCRIPT" --cache "$HW_CACHE_FILE" --count 5 >/dev/null 2>&1 &!
+  /usr/bin/env python3 "$HW_REFRESH_SCRIPT" --cache "$HW_CACHE_FILE" --count 5 >/dev/null 2>&1
 }
 
 hw::_ensure_setup() {
@@ -75,7 +75,7 @@ hw::_ensure_setup() {
   mkdir -p "$HW_CACHE_DIR" 2>/dev/null
   [[ -x $HW_REFRESH_SCRIPT ]] || chmod +x "$HW_REFRESH_SCRIPT" 2>/dev/null
   hw::_install_cron_if_needed
-  [[ -s $HW_CACHE_FILE ]] || hw::_refresh_cache_async
+  hw::_refresh_cache
   HW_SETUP_DONE=1
 }
 
