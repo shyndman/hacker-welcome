@@ -8,7 +8,7 @@ typeset -g HACKER_WELCOME_LOADED=1
 setopt local_options no_prompt_subst
 typeset -g HW_PLUGIN_FILE="${${(%):-%N}}"
 typeset -g HW_PLUGIN_DIR="${HW_PLUGIN_FILE:A:h}"
-typeset -g HW_PROJECT_ROOT="${HW_PLUGIN_DIR:h}"
+typeset -g HW_PROJECT_ROOT="$HW_PLUGIN_DIR"
 typeset -g HW_REFRESH_SCRIPT="$HW_PROJECT_ROOT/scripts/hacker_welcome_refresh.py"
 typeset -g HW_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/hacker-welcome"
 typeset -g HW_CACHE_FILE="$HW_CACHE_DIR/top5.json"
