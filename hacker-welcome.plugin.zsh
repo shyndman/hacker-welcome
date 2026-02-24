@@ -6,6 +6,7 @@ fi
 typeset -g HACKER_WELCOME_LOADED=1
 
 setopt local_options no_prompt_subst
+zmodload zsh/datetime 2>/dev/null
 typeset -g HW_PLUGIN_FILE="${${(%):-%N}}"
 typeset -g HW_PLUGIN_DIR="${HW_PLUGIN_FILE:A:h}"
 typeset -g HW_PROJECT_ROOT="$HW_PLUGIN_DIR"
@@ -15,6 +16,9 @@ typeset -g HW_CACHE_FILE="$HW_CACHE_DIR/top5.json"
 typeset -g HW_LOG_FILE="$HW_CACHE_DIR/refresh.log"
 typeset -g HW_CRON_TAG="# hacker-welcome refresh"
 typeset -g HW_SENTINEL="$HW_CACHE_DIR/.cron-installed"
+typeset -g HW_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/hacker-welcome"
+typeset -g HW_LAST_SHOWN_FILE="$HW_STATE_DIR/last-shown"
+typeset -gi HW_SHOW_INTERVAL=$((4*60*60))
 typeset -gi HW_SETUP_DONE=0
 
 hw::_repeat() {
@@ -73,10 +77,41 @@ hw::_ensure_setup() {
   (( HW_SETUP_DONE )) && return
   command -v python3 >/dev/null 2>&1 || return
   mkdir -p "$HW_CACHE_DIR" 2>/dev/null
+  mkdir -p "$HW_STATE_DIR" 2>/dev/null
   [[ -x $HW_REFRESH_SCRIPT ]] || chmod +x "$HW_REFRESH_SCRIPT" 2>/dev/null
   hw::_install_cron_if_needed
   hw::_refresh_cache
   HW_SETUP_DONE=1
+}
+
+hw::_banner_recently_shown() {
+  local interval=$1
+  (( interval > 0 )) || return 1
+  local now=$EPOCHSECONDS
+  local last=0
+  if [[ -s $HW_LAST_SHOWN_FILE ]]; then
+    local raw
+    if read -r raw < "$HW_LAST_SHOWN_FILE" 2>/dev/null; then
+      [[ $raw == <-> ]] && last=$raw
+    fi
+  elif [[ -f $HW_LAST_SHOWN_FILE ]]; then
+    local mtime
+    if mtime=$(command stat -f %m -- "$HW_LAST_SHOWN_FILE" 2>/dev/null); then
+      last=$mtime
+    elif mtime=$(command stat -c %Y -- "$HW_LAST_SHOWN_FILE" 2>/dev/null); then
+      last=$mtime
+    fi
+  fi
+  (( last > 0 )) || return 1
+  local elapsed=$((now - last))
+  (( elapsed < 0 )) && elapsed=0
+  (( elapsed < interval ))
+}
+
+hw::_record_banner_shown() {
+  local now=$EPOCHSECONDS
+  mkdir -p "$HW_STATE_DIR" 2>/dev/null
+  print -r -- "$now" >| "$HW_LAST_SHOWN_FILE" 2>/dev/null
 }
 
 hw::_load_lines() {
@@ -150,6 +185,10 @@ hw::print_banner() {
 
   hw::_ensure_setup
 
+  if hw::_banner_recently_shown $HW_SHOW_INTERVAL; then
+    return
+  fi
+
   local cols=${COLUMNS:-$(command tput cols 2>/dev/null || print 80)}
   (( cols >= 40 )) || return
   local border_color="%F{6}"
@@ -184,6 +223,7 @@ hw::print_banner() {
 
   hw::_repeat "═" $cols; horiz=$REPLY
   print -P "${border_color}${horiz}${reset}"
+  hw::_record_banner_shown
 }
 
 autoload -Uz add-zsh-hook 2>/dev/null
