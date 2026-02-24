@@ -88,55 +88,56 @@ import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
+
 try:
     data = json.loads(path.read_text(encoding="utf-8"))
 except Exception:
     sys.exit(1)
+
 for idx, entry in enumerate(data[:5], start=1):
     rank = entry.get("rank") or idx
     title = entry.get("title") or "(untitled)"
     score = entry.get("score") or 0
     author = entry.get("author") or "unknown"
-    print(f"{rank}|{title}|{score}|{author}")
+    url = entry.get("url") or entry.get("hn_discussion") or ""
+    discussion = entry.get("hn_discussion") or ""
+    print("\t".join(map(str, [rank, title, score, author, url, discussion])))
 PY
 }
 
-hw::_format_entry() {
+hw::_render_entry() {
   local cols=$1 line="$2"
-  local inner=$((cols - 2))
-  local content_width=$((inner - 2))
-  (( content_width < 10 )) && content_width=10
   local -a parts
-  parts=(${(@s/|/)line})
+  parts=(${(s:	:)line})
   local rank=${parts[1]:-?}
   local title=${parts[2]:-"(untitled)"}
   local score=${parts[3]:-0}
   local author=${parts[4]:-unknown}
-  local label="${rank}. ${title}"
-  local meta=""
-  if (( content_width >= 32 )); then
-    meta="[$score pts | by $author]"
-  elif (( content_width >= 20 )); then
-    meta="[$score pts]"
+  local url=${parts[5]:-}
+  local discussion=${parts[6]:-}
+  local link=${url:-$discussion}
+  local title_color="%B%F{15}"
+  local rank_color="%B%F{11}"
+  local meta_color="%F{7}"
+  local url_color="%F{8}"
+  local reset="%f%b"
+  local rank_label
+  printf -v rank_label "%2s." "$rank"
+  local indent=4
+  local title_width=$((cols - indent - ${#rank_label}))
+  (( title_width < 10 )) && title_width=10
+  hw::_truncate "$title" $title_width
+  local title_text=$REPLY
+  print -P "  ${rank_color}${rank_label}${reset} ${title_color}${title_text}${reset}"
+  local meta="${score} pts · by ${author}"
+  hw::_truncate "$meta" $((cols - indent))
+  local meta_text=$REPLY
+  print -P "    ${meta_color}${meta_text}${reset}"
+  if [[ -n $link ]]; then
+    hw::_truncate "$link" $((cols - indent))
+    local url_text=$REPLY
+    print -P "    ${url_color}${url_text}${reset}"
   fi
-  local title_space=$content_width
-  if [[ -n $meta ]]; then
-    title_space=$((content_width - ${#meta} - 1))
-  fi
-  (( title_space < 4 )) && title_space=4
-  hw::_truncate "$label" $title_space
-  local truncated=$REPLY
-  local line_text="$truncated"
-  if [[ -n $meta ]]; then
-    local gap=$((content_width - ${#truncated} - ${#meta}))
-    (( gap < 1 )) && gap=1
-    hw::_repeat " " $gap; local pad=$REPLY
-    line_text+="$pad$meta"
-  else
-    hw::_repeat " " $((content_width - ${#truncated}))
-    line_text+="$REPLY"
-  fi
-  REPLY="│ ${line_text} │"
 }
 
 
@@ -170,21 +171,14 @@ hw::print_banner() {
   print
 
   local first=1
-  local rank title score author url discussion blank
-  while true; do
-    IFS= read -r rank || break
-    IFS= read -r title || break
-    IFS= read -r score || break
-    IFS= read -r author || break
-    IFS= read -r url || break
-    IFS= read -r discussion || break
-    IFS= read -r blank || true
-    [[ -z $rank && -z $title && -z $score && -z $author && -z $url && -z $discussion ]] && continue
+  local line
+  while IFS= read -r line; do
+    [[ -z $line ]] && continue
     if (( ! first )); then
       print
     fi
     first=0
-    hw::_render_entry $cols "$rank" "$title" "$score" "$author" "$url" "$discussion"
+    hw::_render_entry $cols "$line"
   done <<< "$lines_output"
   print
 
