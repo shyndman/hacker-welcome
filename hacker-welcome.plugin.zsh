@@ -197,4 +197,15 @@ hw::print_banner() {
   print -P "${border_color}└${horiz}┘${reset}"
 }
 
-hw::print_banner
+autoload -Uz add-zsh-hook 2>/dev/null
+
+hw::_print_banner_once() {
+  add-zsh-hook -d precmd hw::_print_banner_once 2>/dev/null
+  hw::print_banner
+}
+
+if (( ${+functions[add-zsh-hook]} )); then
+  add-zsh-hook precmd hw::_print_banner_once
+else
+  hw::print_banner
+fi
