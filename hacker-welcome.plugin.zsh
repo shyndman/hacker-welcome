@@ -139,23 +139,6 @@ hw::_format_entry() {
   REPLY="│ ${line_text} │"
 }
 
-hw::_format_header() {
-  local cols=$1
-  local inner=$((cols - 2))
-  local content_width=$((inner - 2))
-  local label=" TOP HACKER NEWS "
-  if (( ${#label} > content_width )); then
-    hw::_truncate "$label" $content_width
-    label=" $REPLY "
-  fi
-  local padding=$((content_width - ${#label}))
-  (( padding < 0 )) && padding=0
-  local left=$((padding / 2))
-  local right=$((padding - left))
-  hw::_repeat " " $left; local left_pad=$REPLY
-  hw::_repeat " " $right; local right_pad=$REPLY
-  REPLY="│ ${left_pad}${label}${right_pad} │"
-}
 
 hw::print_banner() {
   [[ -o interactive ]] || return
@@ -167,34 +150,46 @@ hw::print_banner() {
   hw::_ensure_setup
 
   local cols=${COLUMNS:-$(command tput cols 2>/dev/null || print 80)}
-  (( cols >= 32 )) || return
-  local inner=$((cols - 2))
+  (( cols >= 40 )) || return
   local border_color="%F{6}"
-  local text_color="%F{15}"
-  local accent_color="%F{3}"
-  local reset="%f"
+  local accent_color="%B%F{14}"
+  local reset="%f%b"
   local lines_output
   if ! lines_output=$(hw::_load_lines); then
-    print -P "${accent_color}Hacker News cache unavailable; updating soon.${reset}"
+    print -P "${border_color}Hacker News cache unavailable; updating soon.${reset}"
     return
   fi
 
-  hw::_repeat "─" $inner; local horiz=$REPLY
-  print -P "${border_color}┌${horiz}┐${reset}"
-  hw::_format_header $cols; local header_line=$REPLY
-  print -P "${border_color}${header_line}${reset}"
-  hw::_repeat "─" $inner; local divider=$REPLY
-  print -P "${border_color}├${divider}┤${reset}"
+  hw::_repeat "═" $cols; local horiz=$REPLY
+  print -P "${border_color}${horiz}${reset}"
+  local header="Hacker News Highlights"
+  hw::_truncate "$header" $((cols - 2))
+  print -P " ${accent_color}${REPLY}${reset}"
+  hw::_repeat "─" $cols; local horiz=$REPLY
+  print -P "${border_color}${horiz}${reset}"
+  print
 
-  local line entry_line
-  while IFS= read -r line; do
-    [[ -z $line ]] && continue
-    hw::_format_entry $cols "$line"; entry_line=$REPLY
-    print -P "${text_color}${entry_line}${reset}"
+  local first=1
+  local rank title score author url discussion blank
+  while true; do
+    IFS= read -r rank || break
+    IFS= read -r title || break
+    IFS= read -r score || break
+    IFS= read -r author || break
+    IFS= read -r url || break
+    IFS= read -r discussion || break
+    IFS= read -r blank || true
+    [[ -z $rank && -z $title && -z $score && -z $author && -z $url && -z $discussion ]] && continue
+    if (( ! first )); then
+      print
+    fi
+    first=0
+    hw::_render_entry $cols "$rank" "$title" "$score" "$author" "$url" "$discussion"
   done <<< "$lines_output"
+  print
 
-  hw::_repeat "─" $inner; horiz=$REPLY
-  print -P "${border_color}└${horiz}┘${reset}"
+  hw::_repeat "═" $cols; horiz=$REPLY
+  print -P "${border_color}${horiz}${reset}"
 }
 
 autoload -Uz add-zsh-hook 2>/dev/null
