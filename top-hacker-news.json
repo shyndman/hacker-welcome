@@ -1,0 +1,102 @@
+[
+  {
+    "rank": 1,
+    "id": 47131173,
+    "title": "Shatner is making an album with 35 metal icons",
+    "author": "mhb",
+    "score": 59,
+    "posted_at": 1771893186,
+    "url": "https://www.guitarworld.com/artists/guitarists/william-shatner-announces-all-star-metal-album",
+    "hn_discussion": "https://news.ycombinator.com/item?id=47131173"
+  },
+  {
+    "rank": 2,
+    "id": 47129361,
+    "title": "FreeBSD doesn't have Wi-Fi driver for my old MacBook. AI build one for me",
+    "author": "varankinv",
+    "score": 245,
+    "posted_at": 1771883068,
+    "url": "https://vladimir.varank.in/notes/2026/02/freebsd-brcmfmac/",
+    "hn_discussion": "https://news.ycombinator.com/item?id=47129361"
+  },
+  {
+    "rank": 3,
+    "id": 47130860,
+    "title": "I Ported Coreboot to the ThinkPad X270",
+    "author": "todsacerdoti",
+    "score": 35,
+    "posted_at": 1771891125,
+    "url": "https://dork.dev/posts/2026-02-20-ported-coreboot/",
+    "hn_discussion": "https://news.ycombinator.com/item?id=47130860"
+  },
+  {
+    "rank": 4,
+    "id": 47127986,
+    "title": "UNIX99, a UNIX-like OS for the TI-99/4A",
+    "author": "marcodiego",
+    "score": 142,
+    "posted_at": 1771877115,
+    "url": "https://forums.atariage.com/topic/380883-unix99-a-unix-like-os-for-the-ti-994a/",
+    "hn_discussion": "https://news.ycombinator.com/item?id=47127986"
+  },
+  {
+    "rank": 5,
+    "id": 47122715,
+    "title": "The Age Verification Trap: Verifying age undermines everyone's data protection",
+    "author": "oldnetguy",
+    "score": 1203,
+    "posted_at": 1771856559,
+    "url": "https://spectrum.ieee.org/age-verification",
+    "hn_discussion": "https://news.ycombinator.com/item?id=47122715"
+  },
+  {
+    "rank": 6,
+    "id": 47129727,
+    "title": "Making Wolfram Tech Available as a Foundation Tool for LLM Systems",
+    "author": "surprisetalk",
+    "score": 45,
+    "posted_at": 1771884694,
+    "url": "https://writings.stephenwolfram.com/2026/02/making-wolfram-tech-available-as-a-foundation-tool-for-llm-systems/",
+    "hn_discussion": "https://news.ycombinator.com/item?id=47129727"
+  },
+  {
+    "rank": 7,
+    "id": 47120899,
+    "title": "Ladybird adopts Rust",
+    "author": "adius",
+    "score": 1076,
+    "posted_at": 1771846162,
+    "url": "https://ladybird.org/posts/adopting-rust/",
+    "hn_discussion": "https://news.ycombinator.com/item?id=47120899"
+  },
+  {
+    "rank": 8,
+    "id": 47123631,
+    "title": "Show HN: PgDog – Scale Postgres without changing the app",
+    "author": "levkk",
+    "score": 188,
+    "posted_at": 1771860804,
+    "url": "https://github.com/pgdogdev/pgdog",
+    "hn_discussion": "https://news.ycombinator.com/item?id=47123631"
+  },
+  {
+    "rank": 9,
+    "id": 47088076,
+    "title": "What is f(x) ≤ g(x) + O(1)? Inequalities With Asymptotics",
+    "author": "ibobev",
+    "score": 27,
+    "posted_at": 1771595708,
+    "url": "https://jamesoswald.dev/posts/bigoinequality/",
+    "hn_discussion": "https://news.ycombinator.com/item?id=47088076"
+  },
+  {
+    "rank": 10,
+    "id": 47128631,
+    "title": "The challenges of porting Shufflepuck Cafe to the 8 bits Apple II",
+    "author": "homarp",
+    "score": 45,
+    "posted_at": 1771880016,
+    "url": "https://www.colino.net/wordpress/archives/2026/02/23/the-challenges-of-porting-shufflepuck-cafe-to-the-8-bits-apple-ii/",
+    "hn_discussion": "https://news.ycombinator.com/item?id=47128631"
+  }
+]
