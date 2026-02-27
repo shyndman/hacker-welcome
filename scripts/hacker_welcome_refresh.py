@@ -1,5 +1,10 @@
-#!/usr/bin/env python3
-"""Fetch top Hacker News stories and store them in a cache file."""
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["wcwidth>=0.2.13"]
+# ///
+"""Fetch top Hacker News stories and atomically cache JSON + rendered banner."""
+
 from __future__ import annotations
 
 import argparse
@@ -11,36 +16,119 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, Iterable, List
+from typing import Any, Iterable
+
+from wcwidth import wcwidth
 
 BASE_URL = "https://hacker-news.firebaseio.com/v0"
 TOP_STORIES_URL = f"{BASE_URL}/topstories.json"
 ITEM_URL = f"{BASE_URL}/item/{{story_id}}.json"
 DEFAULT_COUNT = 5
 
+ANSI_RESET = "\033[0m"
+ANSI_FG_RESET = "\033[39m"
+ANSI_TEXT_RESET = "\033[22;39m"
+ANSI_HEADER_LEFT = "\033[22;1;38:2:156:207:216;48:2:38:35:58m"
+ANSI_HEADER_RIGHT = "\033[22;38:2:144:140:170;48:2:31:29:46m"
+ANSI_DIVIDER = "\033[38:2:110:106:134;49m"
+ANSI_TOP_BG = "\033[48:2:33:32:46m"
+ANSI_ROW_BG = "\033[48:2:25:23:36m"
+ANSI_RANK_TOP = "\033[22;1;38:2:196:167:231m"
+ANSI_RANK = "\033[22;1;38:2:110:106:134m"
+ANSI_TITLE = "\033[22;1;38:2:224:222:244m"
+ANSI_DOMAIN = "\033[3;38:2:110:106:134m"
+ANSI_SCORE = "\033[38:2:235:188:186m"
+ANSI_META = "\033[38:2:144:140:170m"
+ANSI_AUTHOR = "\033[38:2:156:207:216m"
+ANSI_COMMENTS = "\033[38:2:49:116:143;58:2:49:116:143;4:3m"
+ANSI_COMMENTS_RESET = "\033[39;59;24m"
+HEADER_LEFT = "  λ  HACKER NEWS "
+HEADER_RIGHT = "  top_stories.json"
+
+
+class RefreshError(RuntimeError):
+    """Raised when refresh cannot safely produce new cache artifacts."""
+
 
 def fetch_json(url: str) -> Any:
+    """Load JSON from the Hacker News API with a bounded timeout."""
     with urllib.request.urlopen(url, timeout=20) as response:
         return json.load(response)
 
 
-def build_record(story_id: int, rank: int) -> Dict[str, Any]:
-    data = fetch_json(ITEM_URL.format(story_id=story_id))
-    url = data.get("url") or f"https://news.ycombinator.com/item?id={story_id}"
-    return {
-        "rank": rank,
-        "id": story_id,
-        "title": data.get("title") or "(untitled)",
-        "author": data.get("by") or "unknown",
-        "score": data.get("score"),
-        "posted_at": data.get("time"),
-        "url": url,
-        "hn_discussion": f"https://news.ycombinator.com/item?id={story_id}",
-        "fetched_at": int(time.time()),
-    }
+def display_width(text: str) -> int:
+    """Return terminal cell width for visible text content."""
+    width = 0
+    for character in text:
+        char_width = wcwidth(character)
+        width += 0 if char_width < 0 else char_width
+    return width
 
 
-def write_atomic(path: Path, payload: Iterable[Dict[str, Any]]) -> None:
+def truncate_to_width(text: str, limit: int) -> str:
+    """Clamp visible text width and append an ellipsis if truncation occurs."""
+    if limit <= 0:
+        return ""
+    if display_width(text) <= limit:
+        return text
+
+    ellipsis = "…"
+    ellipsis_width = display_width(ellipsis)
+    if limit <= ellipsis_width:
+        return ellipsis
+
+    allowed = limit - ellipsis_width
+    rendered: list[str] = []
+    used = 0
+    for character in text:
+        char_width = wcwidth(character)
+        char_width = 0 if char_width < 0 else char_width
+        if used + char_width > allowed:
+            break
+        rendered.append(character)
+        used += char_width
+    return "".join(rendered) + ellipsis
+
+
+def extract_domain(url: str) -> str:
+    """Extract a compact host label used in the title line."""
+    domain = (url or "").split("://", maxsplit=1)[-1]
+    domain = domain.split("/", maxsplit=1)[0]
+    domain = domain.removeprefix("www.")
+    return domain or "news.ycombinator.com"
+
+
+def relative_time(posted_at: int, now_epoch: int) -> str:
+    """Produce a refresh-snapshot age label for story metadata."""
+    delta = max(0, now_epoch - posted_at)
+    if delta < 60:
+        return f"{delta}s ago"
+    if delta < 3600:
+        return f"{delta // 60}m ago"
+    if delta < 86400:
+        return f"{delta // 3600}h ago"
+    return f"{delta // 86400}d ago"
+
+
+def kitty_link(url: str, text: str) -> str:
+    """Wrap text in OSC8 hyperlinks while keeping visible text unchanged."""
+    if not url:
+        return text
+    return f"\033]8;;{url}\a{text}\033]8;;\a"
+
+
+def write_atomic_text(path: Path, payload: str) -> None:
+    """Write UTF-8 text atomically to prevent partial cache artifacts."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as tmp:
+        tmp.write(payload)
+        tmp.flush()
+        os.fsync(tmp.fileno())
+    os.replace(tmp.name, path)
+
+
+def write_atomic_json(path: Path, payload: Iterable[dict[str, Any]]) -> None:
+    """Write JSON atomically so readers only observe complete snapshots."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as tmp:
         json.dump(list(payload), tmp, ensure_ascii=False, indent=2)
@@ -49,38 +137,157 @@ def write_atomic(path: Path, payload: Iterable[Dict[str, Any]]) -> None:
     os.replace(tmp.name, path)
 
 
-def refresh(cache_path: Path, story_count: int) -> None:
+def build_record(story_id: int, rank: int, fetched_at: int) -> dict[str, Any]:
+    """Normalize Hacker News item data into the cache record contract."""
+    data = fetch_json(ITEM_URL.format(story_id=story_id))
+    discussion_url = f"https://news.ycombinator.com/item?id={story_id}"
+    return {
+        "rank": rank,
+        "id": story_id,
+        "title": data.get("title") or "(untitled)",
+        "author": data.get("by") or "unknown",
+        "score": int(data.get("score") or 0),
+        "comments": int(data.get("descendants") or 0),
+        "posted_at": int(data.get("time") or 0),
+        "url": data.get("url") or discussion_url,
+        "hn_discussion": discussion_url,
+        "fetched_at": fetched_at,
+    }
+
+
+def render_entry(record: dict[str, Any], width: int, now_epoch: int) -> list[str]:
+    """Render one story block as four banner lines using shared width."""
+    rank = int(record.get("rank") or 0)
+    title = str(record.get("title") or "(untitled)")
+    score = int(record.get("score") or 0)
+    author = str(record.get("author") or "unknown")
+    url = str(record.get("url") or "")
+    discussion = str(record.get("hn_discussion") or "")
+    comments = int(record.get("comments") or 0)
+    posted_at = int(record.get("posted_at") or 0)
+    link = url or discussion
+
+    domain_label = f" ({extract_domain(link)})"
+    rank_label = f"{rank:02d}"
+    title_prefix = f"  {rank_label}   "
+    title_plain = f"{title_prefix}{title}{domain_label}"
+
+    comments_text = f"{comments} comments"
+    age_text = relative_time(posted_at, now_epoch)
+    meta_prefix = f"      ▲ {score}  by "
+    meta_suffix = f"  • {age_text}  • {comments_text}"
+    author_budget = max(3, width - display_width(meta_prefix) - display_width(meta_suffix))
+    author_text = truncate_to_width(author, author_budget)
+    meta_plain = f"{meta_prefix}{author_text}{meta_suffix}"
+
+    row_bg = ANSI_TOP_BG if rank == 1 else ANSI_ROW_BG
+    rank_color = ANSI_RANK_TOP if rank == 1 else ANSI_RANK
+    title_styled = (
+        f"  {rank_color}{rank_label}{ANSI_TEXT_RESET}   "
+        f"{ANSI_TITLE}{kitty_link(link, title)}{ANSI_TEXT_RESET}"
+        f"{ANSI_DOMAIN}{domain_label}{ANSI_TEXT_RESET}"
+    )
+    comments_link = kitty_link(discussion, comments_text)
+    meta_styled = (
+        f"      {ANSI_SCORE}▲ {score}{ANSI_FG_RESET}  {ANSI_META}by {ANSI_AUTHOR}{author_text}"
+        f"{ANSI_META}  • {age_text}  • {ANSI_COMMENTS}{comments_link}{ANSI_COMMENTS_RESET}"
+    )
+
+    def pad_line(plain_text: str, styled_text: str) -> str:
+        pad = max(0, width - display_width(plain_text))
+        return f"{row_bg}{styled_text}{' ' * pad}{ANSI_RESET}"
+
+    return [
+        pad_line("", ""),
+        pad_line(title_plain, title_styled),
+        pad_line(meta_plain, meta_styled),
+        pad_line("", ""),
+    ]
+
+
+def compute_banner_width(records: list[dict[str, Any]], now_epoch: int) -> int:
+    """Determine the red-box width from max visible item content width."""
+    item_widths: list[int] = []
+    for record in records:
+        rank_label = f"{int(record.get('rank') or 0):02d}"
+        title = str(record.get("title") or "(untitled)")
+        link = str(record.get("url") or "") or str(record.get("hn_discussion") or "")
+        title_plain = f"  {rank_label}   {title} ({extract_domain(link)})"
+
+        score = int(record.get("score") or 0)
+        author = str(record.get("author") or "unknown")
+        comments = int(record.get("comments") or 0)
+        posted_at = int(record.get("posted_at") or 0)
+        age_text = relative_time(posted_at, now_epoch)
+        meta_plain = f"      ▲ {score}  by {author}  • {age_text}  • {comments} comments"
+
+        item_widths.append(max(display_width(title_plain), display_width(meta_plain)))
+
+    content_width = max(item_widths, default=40)
+    header_min = display_width(HEADER_LEFT) + display_width(HEADER_RIGHT) + 1
+    return max(content_width, header_min)
+
+
+def render_banner(records: list[dict[str, Any]], now_epoch: int) -> str:
+    """Create the full banner string consumed directly by prompt-time shell code."""
+    width = compute_banner_width(records, now_epoch)
+    right_space = max(1, width - display_width(HEADER_LEFT) - display_width(HEADER_RIGHT))
+    divider = "━" * width
+
+    lines = [
+        f"{ANSI_HEADER_LEFT}{HEADER_LEFT}{ANSI_HEADER_RIGHT}{HEADER_RIGHT}{' ' * right_space}{ANSI_RESET}",
+        f"{ANSI_DIVIDER}{divider}{ANSI_RESET}",
+    ]
+    for record in records:
+        lines.extend(render_entry(record, width, now_epoch))
+    lines.append(f"{ANSI_DIVIDER}{divider}{ANSI_RESET}")
+    return "\n".join(lines) + "\n"
+
+
+def refresh(cache_path: Path, banner_path: Path, story_count: int) -> None:
+    """Fetch stories and atomically publish both JSON and rendered banner artifacts."""
+    now_epoch = int(time.time())
     try:
         top_ids = fetch_json(TOP_STORIES_URL)[:story_count]
-    except Exception as exc:  # pylint: disable=broad-except
-        print(f"[hacker-welcome] Failed to fetch top story IDs: {exc}", file=sys.stderr)
-        raise
+    except Exception as exc:
+        raise RefreshError(f"Failed to fetch top story IDs: {exc}") from exc
 
-    records: List[Dict[str, Any]] = []
-    for idx, story_id in enumerate(top_ids, start=1):
+    records: list[dict[str, Any]] = []
+    for rank, story_id in enumerate(top_ids, start=1):
         try:
-            records.append(build_record(story_id, idx))
+            records.append(build_record(int(story_id), rank, now_epoch))
         except urllib.error.URLError as exc:
             print(f"[hacker-welcome] Failed to fetch story {story_id}: {exc}", file=sys.stderr)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             print(f"[hacker-welcome] Unexpected error for story {story_id}: {exc}", file=sys.stderr)
 
     if not records:
-        print("[hacker-welcome] No stories fetched; cache not updated", file=sys.stderr)
-        return
+        raise RefreshError("No stories fetched; cache not updated")
 
-    write_atomic(cache_path, records)
+    banner_text = render_banner(records, now_epoch)
+    if not banner_text.strip():
+        raise RefreshError("Rendered banner is empty")
+
+    write_atomic_json(cache_path, records)
+    write_atomic_text(banner_path, banner_text)
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    """Parse CLI arguments for cache locations and story-count controls."""
+    default_cache_dir = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "hacker-welcome"
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--cache",
         type=Path,
-        default=Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
-        / "hacker-welcome"
-        / "top5.json",
-        help="path to cache file",
+        default=default_cache_dir / "top5.json",
+        help="path to JSON cache file",
+    )
+    parser.add_argument(
+        "--banner",
+        type=Path,
+        default=default_cache_dir / "top5.banner",
+        help="path to rendered banner cache file",
     )
     parser.add_argument(
         "--count",
@@ -91,11 +298,16 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: List[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:
+    """Run refresh workflow and return shell-friendly status code."""
     args = parse_args(argv or sys.argv[1:])
     try:
-        refresh(args.cache, max(1, args.count))
-    except Exception:
+        refresh(args.cache, args.banner, max(1, args.count))
+    except RefreshError as exc:
+        print(f"[hacker-welcome] {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"[hacker-welcome] Unexpected refresh failure: {exc}", file=sys.stderr)
         return 1
     return 0
 
