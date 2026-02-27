@@ -20,6 +20,7 @@ typeset -g HW_CRON_TAG="# hacker-welcome refresh"
 typeset -g HW_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/hacker-welcome"
 typeset -g HW_LAST_SHOWN_FILE="$HW_STATE_DIR/last-shown"
 typeset -gi HW_SHOW_INTERVAL=$((4*60*60))
+typeset -gi HW_MIN_COLUMNS=160
 typeset -gi HW_SETUP_DONE=0
 typeset -gr HW_FALLBACK_LINE="Hacker Welcome unavailable."
 
@@ -112,6 +113,13 @@ hw::print_banner() {
   if [[ ${PWD:A} != ${HOME:A} ]]; then
     return
   fi
+
+  local columns
+  if ! columns=$(tput cols 2>/dev/null); then
+    return
+  fi
+  [[ $columns == <-> ]] || return
+  (( columns >= HW_MIN_COLUMNS )) || return
 
   hw::_ensure_setup
 
