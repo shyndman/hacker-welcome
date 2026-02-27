@@ -42,6 +42,18 @@ ANSI_META = "\033[38:2:144:140:170m"
 ANSI_AUTHOR = "\033[38:2:156:207:216m"
 ANSI_COMMENTS = "\033[38:2:49:116:143;58:2:49:116:143;4:3m"
 ANSI_COMMENTS_RESET = "\033[39;59;24m"
+KITTY_TEXT_SIZING_PREFIX = "\033]66;"
+KITTY_TEXT_SIZING_SUFFIX = "\a"
+TITLE_SCALE = 1
+TITLE_SIZE_NUMERATOR = 0
+TITLE_SIZE_DENOMINATOR = 0
+DOMAIN_SIZE_NUMERATOR = 7
+DOMAIN_SIZE_DENOMINATOR = 8
+ORDINAL_SIZE_NUMERATOR = 14
+ORDINAL_SIZE_DENOMINATOR = 15
+SECOND_LINE_SIZE_NUMERATOR = 14
+SECOND_LINE_SIZE_DENOMINATOR = 15
+SECOND_LINE_VERTICAL_ALIGN = 1
 HEADER_LEFT = "  λ  HACKER NEWS "
 HEADER_RIGHT = "  top_stories.json"
 
@@ -117,6 +129,26 @@ def kitty_link(url: str, text: str) -> str:
     return f"\033]8;;{url}\a{text}\033]8;;\a"
 
 
+def kitty_text_size(
+    text: str,
+    numerator: int,
+    denominator: int,
+    scale: int | None = None,
+    vertical_align: int | None = None,
+) -> str:
+    """Wrap text in kitty OSC 66 metadata to request fractional text sizing."""
+    metadata: list[str] = []
+    if scale is not None:
+        metadata.append(f"s={scale}")
+    metadata.extend([f"n={numerator}", f"d={denominator}"])
+    if vertical_align is not None:
+        metadata.append(f"v={vertical_align}")
+    return (
+        f"{KITTY_TEXT_SIZING_PREFIX}{':'.join(metadata)};"
+        f"{text}{KITTY_TEXT_SIZING_SUFFIX}"
+    )
+
+
 def write_atomic_text(path: Path, payload: str) -> None:
     """Write UTF-8 text atomically to prevent partial cache artifacts."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -167,10 +199,10 @@ def render_entry(record: dict[str, Any], width: int, now_epoch: int) -> list[str
     posted_at = int(record.get("posted_at") or 0)
     link = url or discussion
 
-    domain_label = f" ({extract_domain(link)})"
+    domain_label = f"({extract_domain(link)})"
     rank_label = f"{rank:02d}"
     title_prefix = f"  {rank_label}   "
-    title_plain = f"{title_prefix}{title}{domain_label}"
+    title_plain = f"{title_prefix}{title} {domain_label}"
 
     comments_text = f"{comments} comments"
     age_text = relative_time(posted_at, now_epoch)
@@ -180,17 +212,51 @@ def render_entry(record: dict[str, Any], width: int, now_epoch: int) -> list[str
     author_text = truncate_to_width(author, author_budget)
     meta_plain = f"{meta_prefix}{author_text}{meta_suffix}"
 
-    row_bg = ANSI_TOP_BG if rank == 1 else ANSI_ROW_BG
+    row_bg = ANSI_ROW_BG
     rank_color = ANSI_RANK_TOP if rank == 1 else ANSI_RANK
+    sized_rank = kitty_text_size(rank_label, ORDINAL_SIZE_NUMERATOR, ORDINAL_SIZE_DENOMINATOR)
+    sized_title = kitty_text_size(title, TITLE_SIZE_NUMERATOR, TITLE_SIZE_DENOMINATOR, scale=TITLE_SCALE)
+    sized_domain = kitty_text_size(domain_label, DOMAIN_SIZE_NUMERATOR, DOMAIN_SIZE_DENOMINATOR, vertical_align=1)
     title_styled = (
-        f"  {rank_color}{rank_label}{ANSI_TEXT_RESET}   "
-        f"{ANSI_TITLE}{kitty_link(link, title)}{ANSI_TEXT_RESET}"
-        f"{ANSI_DOMAIN}{domain_label}{ANSI_TEXT_RESET}"
+        f"  {rank_color}{sized_rank}{ANSI_TEXT_RESET}   "
+        f"{ANSI_TITLE}{kitty_link(link, sized_title)}{ANSI_TEXT_RESET}"
+        f"{ANSI_DOMAIN} {sized_domain}{ANSI_TEXT_RESET}"
     )
-    comments_link = kitty_link(discussion, comments_text)
+    sized_score = kitty_text_size(
+        f" {score}",
+        SECOND_LINE_SIZE_NUMERATOR,
+        SECOND_LINE_SIZE_DENOMINATOR,
+        vertical_align=SECOND_LINE_VERTICAL_ALIGN,
+    )
+    sized_by = kitty_text_size(
+        "  by ",
+        SECOND_LINE_SIZE_NUMERATOR,
+        SECOND_LINE_SIZE_DENOMINATOR,
+        vertical_align=SECOND_LINE_VERTICAL_ALIGN,
+    )
+    sized_author = kitty_text_size(
+        author_text,
+        SECOND_LINE_SIZE_NUMERATOR,
+        SECOND_LINE_SIZE_DENOMINATOR,
+        vertical_align=SECOND_LINE_VERTICAL_ALIGN,
+    )
+    sized_tail = kitty_text_size(
+        f"  • {age_text}  • ",
+        SECOND_LINE_SIZE_NUMERATOR,
+        SECOND_LINE_SIZE_DENOMINATOR,
+        vertical_align=SECOND_LINE_VERTICAL_ALIGN,
+    )
+    sized_comments = kitty_text_size(
+        comments_text,
+        SECOND_LINE_SIZE_NUMERATOR,
+        SECOND_LINE_SIZE_DENOMINATOR,
+        vertical_align=SECOND_LINE_VERTICAL_ALIGN,
+    )
+    comments_link = kitty_link(discussion, sized_comments)
     meta_styled = (
-        f"      {ANSI_SCORE}▲ {score}{ANSI_FG_RESET}  {ANSI_META}by {ANSI_AUTHOR}{author_text}"
-        f"{ANSI_META}  • {age_text}  • {ANSI_COMMENTS}{comments_link}{ANSI_COMMENTS_RESET}"
+        f"      {ANSI_SCORE}▲{sized_score}{ANSI_FG_RESET}"
+        f"{ANSI_META}{sized_by}{ANSI_AUTHOR}{sized_author}"
+        f"{ANSI_META}{sized_tail}{ANSI_COMMENTS}{comments_link}{ANSI_COMMENTS_RESET}"
     )
 
     def pad_line(plain_text: str, styled_text: str) -> str:
