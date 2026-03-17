@@ -40,17 +40,20 @@ hw::_refresh_cache_now() {
 
 # Install a tagged cron entry once so prompt-time code never needs network work.
 hw::_install_cron_if_needed() {
-  local existing line cron_status
+  local existing line cron_status entry
+  local -a cron_lines kept_lines
   existing=$(crontab -l 2>/dev/null)
   cron_status=$?
   line=$(hw::_cron_line)
 
-  if (( cron_status == 0 )) && [[ $existing == *${HW_CRON_TAG}* ]]; then
-    return
-  fi
-
   if (( cron_status == 0 )) && [[ -n $existing ]]; then
-    { print -r -- "$existing"; print -r -- "$line"; } | crontab -
+    cron_lines=(${(f)existing})
+    kept_lines=()
+    for entry in "${cron_lines[@]}"; do
+      [[ $entry == *${HW_CRON_TAG}* ]] && continue
+      kept_lines+=("$entry")
+    done
+    print -l -r -- "${kept_lines[@]}" "$line" | crontab -
   else
     print -r -- "$line" | crontab -
   fi
