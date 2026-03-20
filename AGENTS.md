@@ -7,8 +7,8 @@
 
 ## Architecture & Data Flow
 1. `hacker-welcome.plugin.zsh` guards against double-loading, derives cache/cron paths relative to the plugin file, and seeds global state (`HW_*`).
-2. `hw::_ensure_setup` (invoked from `hw::print_banner`) confirms `python3` is available, prepares the cache dir, chmods the helper script, installs/updates the cron entry, and triggers an immediate cache refresh.
-3. Every 15 minutes the cron job runs `/usr/bin/env python3 scripts/hacker_welcome_refresh.py --cache ~/.cache/hacker-welcome/top5.json --count 5`, which calls the Hacker News Firebase API and atomically rewrites `top5.json`.
+2. `hw::_ensure_setup` (invoked from `hw::print_banner`) prepares the cache/state dirs, ensures the helper script is executable, and installs/updates the cron entry.
+3. Every 15 minutes the cron job runs `scripts/hacker_welcome_refresh.py --cache ~/.cache/hacker-welcome/top5.json --count 5`, which uses its `uv` shebang to call the Hacker News Firebase API and atomically rewrites `top5.json`.
 4. `hw::_load_lines` shells out to Python with an inline script to parse the cached JSON and emit tab-delimited rows. `hw::_render_entry` handles truncation, coloring, and wrapping per terminal width, after which `hw::print_banner` prints the formatted table surrounded by borders.
 5. A `precmd` hook (`hw::_print_banner_once`) ensures the banner runs only once per session and only for interactive, tty-bound prompts in the home directory.
 
@@ -25,8 +25,8 @@
 ## Code Conventions & Common Patterns
 - Zsh globals are prefixed `HW_` via `typeset -g`; helper functions live under the `hw::` namespace (`hw::_repeat`, `hw::print_banner`).
 - Rendering logic favors `print -P` color escapes and local width-aware truncation via `_truncate`; keep output pure text/ANSI without shell side effects.
-- Setup guards rely on integer flags (`HW_SETUP_DONE`) and `command -v` probes; follow this pattern for new prerequisites.
-- Python helper is single-file, standard-library only, typed with `typing` hints, and writes caches using `write_atomic` (temp file + `os.replace`).
+- Setup guards rely on integer flags (`HW_SETUP_DONE`); follow this pattern for new prerequisites (like `uv` or `python3` probes).
+- Python helper is single-file, uses `uv` for dependency management (including `wcwidth`), is typed with `typing` hints, and writes caches using `write_atomic` (temp file + `os.replace`).
 - Error handling favors stderr logging plus graceful fallback: failed story fetches log but do not abort the run; absence of cache displays "updating soon" in the banner.
 
 ## Important Files
@@ -37,10 +37,10 @@
 
 ## Runtime / Tooling Preferences
 - Shell: Zsh (needs `add-zsh-hook`, `print -P`, and prompt substitution disabled locally).
-- Python: System `python3` available on PATH; uses stdlib modules only (urllib, argparse, json, tempfile).
+- Python: System `python3` available on PATH; uses `uv` to manage script dependencies (like `wcwidth`).
 - Scheduler: `crontab` (user-level) with a tagged entry `# hacker-welcome refresh` that runs every 15 minutes.
 - Terminal utilities: `tput` for width detection; ANSI color support expected but banner gracefully truncates for narrow terminals.
-- No package manager configs are present; dependency management consists of ensuring `python3` + outbound HTTPS access.
+- Dependency management consists of ensuring `uv` + `python3` + outbound HTTPS access.
 
 ## Testing & QA
 - No automated tests, CI workflows, or lint configs exist today.
