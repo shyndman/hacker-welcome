@@ -27,7 +27,17 @@ typeset -gr HW_FALLBACK_LINE="Hacker Welcome unavailable."
 
 # Compose the cron command that refreshes both JSON and rendered-banner artifacts.
 hw::_cron_line() {
-  print -r -- "*/15 * * * * ${(q)HW_REFRESH_SCRIPT} --cache ${(q)HW_CACHE_FILE} --banner ${(q)HW_BANNER_FILE} --count ${HW_STORY_COUNT} >> ${(q)HW_LOG_FILE} 2>&1 ${HW_CRON_TAG}"
+  local -U path_parts=("/usr/bin" "/bin")
+  local uv_bin py_bin
+  if uv_bin=$(command -v uv 2>/dev/null); then
+    path_parts+=("${uv_bin:A:h}")
+  fi
+  if py_bin=$(command -v python3 2>/dev/null); then
+    path_parts+=("${py_bin:A:h}")
+  fi
+  local p="${(j.:.)path_parts}"
+
+  print -r -- "*/15 * * * * /usr/bin/env PATH=${(qq)p} ${(q)HW_REFRESH_SCRIPT} --cache ${(q)HW_CACHE_FILE} --banner ${(q)HW_BANNER_FILE} --count ${HW_STORY_COUNT} >> ${(q)HW_LOG_FILE} 2>&1 ${HW_CRON_TAG}"
 }
 
 hw::_refresh_cache_now() {
