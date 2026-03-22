@@ -29,6 +29,7 @@ ANSI_RESET = "\033[0m"
 ANSI_FG_RESET = "\033[39m"
 ANSI_TEXT_RESET = "\033[22;39m"
 ANSI_HEADER_LEFT = "\033[22;1;38:2:156:207:216;48:2:38:35:58m"
+ANSI_HEADER_LAMBDA = "\033[22;1;38:2:255:102:0;48:2:38:35:58m"
 ANSI_HEADER_RIGHT = "\033[22;38:2:144:140:170;48:2:31:29:46m"
 ANSI_DIVIDER = "\033[38:2:110:106:134;49m"
 ANSI_TOP_BG = "\033[48:2:33:32:46m"
@@ -55,6 +56,7 @@ SECOND_LINE_SIZE_NUMERATOR = 14
 SECOND_LINE_SIZE_DENOMINATOR = 15
 SECOND_LINE_VERTICAL_ALIGN = 1
 HEADER_LEFT = "  λ  HACKER NEWS "
+HEADER_LAMBDA = "λ"
 HEADER_RIGHT = "  top_stories.json"
 
 
@@ -299,9 +301,14 @@ def render_banner(records: list[dict[str, Any]], now_epoch: int) -> str:
     width = compute_banner_width(records, now_epoch)
     right_space = max(1, width - display_width(HEADER_LEFT) - display_width(HEADER_RIGHT))
     divider = "━" * width
+    header_left_styled = HEADER_LEFT.replace(
+        HEADER_LAMBDA,
+        f"{ANSI_HEADER_LAMBDA}{HEADER_LAMBDA}{ANSI_HEADER_LEFT}",
+        1,
+    )
 
     lines = [
-        f"{ANSI_HEADER_LEFT}{HEADER_LEFT}{ANSI_HEADER_RIGHT}{HEADER_RIGHT}{' ' * right_space}{ANSI_RESET}",
+        f"{ANSI_HEADER_LEFT}{header_left_styled}{ANSI_HEADER_RIGHT}{HEADER_RIGHT}{' ' * right_space}{ANSI_RESET}",
         f"{ANSI_DIVIDER}{divider}{ANSI_RESET}",
     ]
     for record in records:
