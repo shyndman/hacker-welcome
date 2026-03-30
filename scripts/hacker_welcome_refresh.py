@@ -28,12 +28,10 @@ DEFAULT_COUNT = 5
 ANSI_RESET = "\033[0m"
 ANSI_FG_RESET = "\033[39m"
 ANSI_TEXT_RESET = "\033[22;39m"
-ANSI_HEADER_LEFT = "\033[22;1;38:2:156:207:216;48:2:38:35:58m"
-ANSI_HEADER_LAMBDA = "\033[22;1;38:2:255:102:0;48:2:38:35:58m"
-ANSI_HEADER_RIGHT = "\033[22;38:2:144:140:170;48:2:31:29:46m"
+ANSI_HEADER_LEFT = "\033[22;1;38:2:156:207:216m"
+ANSI_HEADER_LAMBDA = "\033[22;1;38:2:255:102:0m"
+ANSI_HEADER_RIGHT = "\033[22;38:2:144:140:170m"
 ANSI_DIVIDER = "\033[38:2:110:106:134;49m"
-ANSI_TOP_BG = "\033[48:2:33:32:46m"
-ANSI_ROW_BG = "\033[48:2:25:23:36m"
 ANSI_RANK_TOP = "\033[22;1;38:2:196:167:231m"
 ANSI_RANK = "\033[22;1;38:2:110:106:134m"
 ANSI_TITLE = "\033[22;1;38:2:224:222:244m"
@@ -214,7 +212,6 @@ def render_entry(record: dict[str, Any], width: int, now_epoch: int) -> list[str
     author_text = truncate_to_width(author, author_budget)
     meta_plain = f"{meta_prefix}{author_text}{meta_suffix}"
 
-    row_bg = ANSI_ROW_BG
     rank_color = ANSI_RANK_TOP if rank == 1 else ANSI_RANK
     sized_rank = kitty_text_size(rank_label, ORDINAL_SIZE_NUMERATOR, ORDINAL_SIZE_DENOMINATOR)
     sized_title = kitty_text_size(title, TITLE_SIZE_NUMERATOR, TITLE_SIZE_DENOMINATOR, scale=TITLE_SCALE)
@@ -263,7 +260,7 @@ def render_entry(record: dict[str, Any], width: int, now_epoch: int) -> list[str
 
     def pad_line(plain_text: str, styled_text: str) -> str:
         pad = max(0, width - display_width(plain_text))
-        return f"{row_bg}{styled_text}{' ' * pad}{ANSI_RESET}"
+        return f"{styled_text}{' ' * pad}{ANSI_RESET}"
 
     return [
         pad_line("", ""),
