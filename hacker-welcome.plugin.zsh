@@ -19,6 +19,7 @@ typeset -g HW_LOG_FILE="$HW_CACHE_DIR/refresh.log"
 typeset -g HW_CRON_TAG="# hacker-welcome refresh"
 typeset -g HW_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/hacker-welcome"
 typeset -g HW_LAST_SHOWN_FILE="$HW_STATE_DIR/last-shown"
+typeset -g HW_UV_BIN=""
 typeset -gi HW_STORY_COUNT=5
 typeset -gi HW_SHOW_INTERVAL=$((4*60*60))
 typeset -gi HW_MIN_COLUMNS=160
@@ -26,21 +27,45 @@ typeset -gi HW_SETUP_DONE=0
 typeset -gr HW_FALLBACK_LINE="Hacker Welcome unavailable."
 
 # Compose the cron command that refreshes both JSON and rendered-banner artifacts.
-hw::_cron_line() {
-  local -U path_parts=("/usr/bin" "/bin")
-  local uv_bin py_bin
-  if uv_bin=$(command -v uv 2>/dev/null); then
-    path_parts+=("${uv_bin:A:h}")
-  fi
-  if py_bin=$(command -v python3 2>/dev/null); then
-    path_parts+=("${py_bin:A:h}")
-  fi
-  local p="${(j.:.)path_parts}"
+hw::_resolve_uv_bin() {
+  [[ -n $HW_UV_BIN ]] && return 0
 
-  print -r -- "*/15 * * * * /usr/bin/env PATH=${(qq)p} ${(q)HW_REFRESH_SCRIPT} --cache ${(q)HW_CACHE_FILE} --banner ${(q)HW_BANNER_FILE} --count ${HW_STORY_COUNT} >> ${(q)HW_LOG_FILE} 2>&1 ${HW_CRON_TAG}"
+  local uv_bin
+  if uv_bin=$(command -v uv 2>/dev/null); then
+    HW_UV_BIN="${uv_bin:A}"
+    return 0
+  fi
+
+  return 1
+}
+
+hw::_cron_line() {
+  local refresh_command
+  if hw::_resolve_uv_bin; then
+    refresh_command="${(q)HW_UV_BIN} run --script ${(q)HW_REFRESH_SCRIPT}"
+  else
+    local -U path_parts=("/usr/bin" "/bin")
+    local py_bin
+    if py_bin=$(command -v python3 2>/dev/null); then
+      path_parts+=("${py_bin:A:h}")
+    fi
+    local p="${(j.:.)path_parts}"
+    refresh_command="/usr/bin/env PATH=${(qq)p} ${(q)HW_REFRESH_SCRIPT}"
+  fi
+
+  print -r -- "*/15 * * * * ${refresh_command} --cache ${(q)HW_CACHE_FILE} --banner ${(q)HW_BANNER_FILE} --count ${HW_STORY_COUNT} >> ${(q)HW_LOG_FILE} 2>&1 ${HW_CRON_TAG}"
 }
 
 hw::_refresh_cache_now() {
+  if hw::_resolve_uv_bin; then
+    "$HW_UV_BIN" run --script "$HW_REFRESH_SCRIPT" \
+      --cache "$HW_CACHE_FILE" \
+      --banner "$HW_BANNER_FILE" \
+      --count "$HW_STORY_COUNT" \
+      >> "$HW_LOG_FILE" 2>&1
+    return
+  fi
+
   "$HW_REFRESH_SCRIPT" \
     --cache "$HW_CACHE_FILE" \
     --banner "$HW_BANNER_FILE" \
